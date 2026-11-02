@@ -35,7 +35,8 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         status = TextView(this).apply { setTextColor(Color.parseColor("#F5E6D3")); textSize = 14f }
-        pad = HidGamepad(this) { msg -> runOnUiThread { status.text = msg } }
+        pad = PadService.obtain(this)
+        pad.listener = { msg -> runOnUiThread { status.text = msg } }
 
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -45,7 +46,7 @@ class MainActivity : AppCompatActivity() {
             addView(Button(context).apply { text = "Pair"; setOnClickListener { makeDiscoverable() } })
             addView(Button(context).apply { text = "Connect"; setOnClickListener { pickDevice() } })
             addView(Button(context).apply {
-                text = "Mode: TV"
+                text = if (pad.tvMode) "Mode: TV" else "Mode: GAME"
                 setOnClickListener {
                     pad.tvMode = !pad.tvMode
                     text = if (pad.tvMode) "Mode: TV" else "Mode: GAME"
@@ -62,19 +63,25 @@ class MainActivity : AppCompatActivity() {
             addView(bar, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         })
 
-        if (hasPerms()) pad.start() else requestPerms()
+        if (hasPerms()) startPadService() else requestPerms()
+    }
+
+    private fun startPadService() {
+        val i = Intent(this, PadService::class.java)
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
     }
 
     private fun perms() = if (Build.VERSION.SDK_INT >= 31)
-        arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE)
+        listOfNotNull(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE,
+            if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null).toTypedArray()
     else emptyArray()
 
-    private fun hasPerms() = perms().all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    private fun hasPerms() = perms().filter { it != Manifest.permission.POST_NOTIFICATIONS }.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun requestPerms() = ActivityCompat.requestPermissions(this, perms(), 1)
 
     override fun onRequestPermissionsResult(rc: Int, p: Array<out String>, r: IntArray) {
         super.onRequestPermissionsResult(rc, p, r)
-        if (hasPerms()) pad.start() else status.text = "Bluetooth permission needed"
+        if (hasPerms()) startPadService() else status.text = "Bluetooth permission needed"
     }
 
     /** Lets the TV find this tablet in "Pair accessory". */
@@ -136,7 +143,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        pad.stop()
+        // Keep the Bluetooth link alive; just detach this screen.
+        pad.listener = null
         super.onDestroy()
     }
 }

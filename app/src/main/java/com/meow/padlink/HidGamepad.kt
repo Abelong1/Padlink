@@ -10,7 +10,18 @@ import java.util.concurrent.Executors
  * The TV sees it like any physical controller (no TV app needed).
  */
 @SuppressLint("MissingPermission")
-class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Unit) {
+class HidGamepad(private val ctx: Context) {
+
+    /** UI listener; last status is replayed when a screen re-attaches. */
+    var listener: ((String) -> Unit)? = null
+        set(v) { field = v; v?.invoke(lastStatus) }
+    private var lastStatus = "Starting…"
+    private fun onStatus(msg: String) { lastStatus = msg; listener?.invoke(msg) }
+
+    private val prefs = ctx.getSharedPreferences("padlink", Context.MODE_PRIVATE)
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var userStopped = false
+    private var retries = 0
 
     companion object {
         const val REPORT_ID = 1
@@ -122,14 +133,23 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(device: BluetoothDevice?, registered: Boolean) {
-            onStatus(if (registered) "Ready — pair from TV or tap a device" else "Not registered")
+            if (registered) {
+                onStatus("Ready — pair from TV or tap Connect")
+                reconnectLast()
+            } else onStatus("Not registered")
         }
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             when (state) {
-                BluetoothProfile.STATE_CONNECTED -> { host = device; onStatus("Connected: ${device.name}") }
+                BluetoothProfile.STATE_CONNECTED -> {
+                    host = device; retries = 0
+                    prefs.edit().putString("last", device.address).apply()
+                    onStatus("Connected: ${device.name}")
+                }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (host == device) host = null
-                    onStatus("Disconnected")
+                    if (userStopped) { onStatus("Disconnected"); return }
+                    onStatus("Link lost — reconnecting…")
+                    scheduleReconnect()
                 }
             }
         }
@@ -138,8 +158,13 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
         }
     }
 
+    private var started = false
+
     fun start() {
+        if (started) return
         if (adapter == null) { onStatus("No Bluetooth"); return }
+        started = true
+        userStopped = false
         adapter.getProfileProxy(ctx, object : BluetoothProfile.ServiceListener {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
                 hid = proxy as BluetoothHidDevice
@@ -154,11 +179,28 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
     }
 
     fun connect(device: BluetoothDevice) {
+        userStopped = false
         onStatus("Connecting to ${device.name}…")
         hid?.connect(device)
     }
 
+    /** Auto-reconnect to the TV used last time. */
+    private fun reconnectLast() {
+        if (host != null) return
+        val addr = prefs.getString("last", null) ?: return
+        val dev = adapter?.bondedDevices?.firstOrNull { it.address == addr } ?: return
+        hid?.connect(dev)
+    }
+
+    private fun scheduleReconnect() {
+        if (retries >= 20) { onStatus("Can't reach TV — tap Connect"); retries = 0; return }
+        retries++
+        handler.postDelayed({ if (host == null && !userStopped) reconnectLast() }, 2000)
+    }
+
     fun stop() {
+        userStopped = true
+        handler.removeCallbacksAndMessages(null)
         host?.let { hid?.disconnect(it) }
         hid?.unregisterApp()
         adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hid)
