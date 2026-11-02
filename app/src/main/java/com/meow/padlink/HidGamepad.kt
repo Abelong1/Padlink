@@ -68,6 +68,15 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
             val codes = intArrayOf(0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38)
             for (i in codes.indices) { put(plain[i], codes[i] to false); put(shifted[i], codes[i] to true) }
         }
+        const val CONSUMER_ID = 2
+        // Consumer usages → Android keys
+        const val CC_OK = 0x41      // Menu Pick → DPAD_CENTER
+        const val CC_UP = 0x42; const val CC_DOWN = 0x43
+        const val CC_LEFT = 0x44; const val CC_RIGHT = 0x45
+        const val CC_MENU = 0x40
+        const val CC_HOME = 0x223   // AC Home
+        const val CC_BACK = 0x224   // AC Back
+        const val CC_VOL_UP = 0xE9; const val CC_VOL_DOWN = 0xEA
     }
 
     private val typer = Executors.newSingleThreadExecutor()
@@ -85,17 +94,6 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
         Thread.sleep(12)
         hid?.sendReport(h, KEYBOARD_ID, ByteArray(8))
         Thread.sleep(12)
-    }
-
-        const val CONSUMER_ID = 2
-        // Consumer usages → Android keys
-        const val CC_OK = 0x41      // Menu Pick → DPAD_CENTER
-        const val CC_UP = 0x42; const val CC_DOWN = 0x43
-        const val CC_LEFT = 0x44; const val CC_RIGHT = 0x45
-        const val CC_MENU = 0x40
-        const val CC_HOME = 0x223   // AC Home
-        const val CC_BACK = 0x224   // AC Back
-        const val CC_VOL_UP = 0xE9; const val CC_VOL_DOWN = 0xEA
     }
 
     /** TV mode: D-pad/A/B act like a TV remote. Game mode: everything is gamepad. */
