@@ -40,8 +40,52 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
             0x15, 0x00, 0x26, 0xFF.toByte(), 0x03,
             0x19, 0x00, 0x2A, 0xFF.toByte(), 0x03,
             0x75, 0x10, 0x95.toByte(), 0x01, 0x81.toByte(), 0x00,
+            0xC0.toByte(),
+            // Report 3: Keyboard — modifier byte, reserved, 6 keys
+            0x05, 0x01, 0x09, 0x06, 0xA1.toByte(), 0x01,
+            0x85.toByte(), 0x03, // report ID = KEYBOARD_ID
+            0x05, 0x07, 0x19, 0xE0.toByte(), 0x29, 0xE7.toByte(), 0x15, 0x00, 0x25, 0x01,
+            0x75, 0x01, 0x95.toByte(), 0x08, 0x81.toByte(), 0x02,
+            0x95.toByte(), 0x01, 0x75, 0x08, 0x81.toByte(), 0x01,
+            0x95.toByte(), 0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0x65,
+            0x05, 0x07, 0x19, 0x00, 0x29, 0x65, 0x81.toByte(), 0x00,
             0xC0.toByte()
         )
+
+        const val KEYBOARD_ID = 3
+        const val KEY_ENTER = 0x28; const val KEY_BACKSPACE = 0x2A
+        private const val SHIFT = 0x02
+
+        /** US layout: char → (keycode, needsShift) */
+        private val KEYMAP: Map<Char, Pair<Int, Boolean>> = HashMap<Char, Pair<Int, Boolean>>().apply {
+            for (i in 0 until 26) {
+                put('a' + i, (0x04 + i) to false); put('A' + i, (0x04 + i) to true)
+            }
+            "1234567890".forEachIndexed { i, c -> put(c, (0x1E + i) to false) }
+            "!@#$%^&*()".forEachIndexed { i, c -> put(c, (0x1E + i) to true) }
+            put('\n', 0x28 to false); put('\t', 0x2B to false); put(' ', 0x2C to false)
+            val plain = "-=[]\\;'`,./"; val shifted = "_+{}|:\"~<>?"
+            val codes = intArrayOf(0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38)
+            for (i in codes.indices) { put(plain[i], codes[i] to false); put(shifted[i], codes[i] to true) }
+        }
+    }
+
+    private val typer = Executors.newSingleThreadExecutor()
+
+    /** Type text on the TV. Unsupported characters (emoji, accents) are skipped. */
+    fun typeText(text: String) = typer.execute {
+        for (c in text) KEYMAP[c]?.let { (code, shift) -> tap(code, if (shift) SHIFT else 0) }
+    }
+
+    fun tapKey(code: Int) = typer.execute { tap(code, 0) }
+
+    private fun tap(code: Int, mod: Int) {
+        val h = host ?: return
+        hid?.sendReport(h, KEYBOARD_ID, byteArrayOf(mod.toByte(), 0, code.toByte(), 0, 0, 0, 0, 0))
+        Thread.sleep(12)
+        hid?.sendReport(h, KEYBOARD_ID, ByteArray(8))
+        Thread.sleep(12)
+    }
 
         const val CONSUMER_ID = 2
         // Consumer usages → Android keys

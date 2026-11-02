@@ -8,9 +8,15 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -45,10 +51,14 @@ class MainActivity : AppCompatActivity() {
                     text = if (pad.tvMode) "Mode: TV" else "Mode: GAME"
                 }
             })
+            addView(Button(context).apply { text = "⌨ Type"; setOnClickListener { toggleKeyboard() } })
         }
+
+        typeField = buildTypeField()
 
         setContentView(FrameLayout(this).apply {
             addView(PadView(context, pad))
+            addView(typeField, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM))
             addView(bar, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         })
 
@@ -82,6 +92,47 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Connect to TV")
             .setItems(devices.map { it.name ?: it.address }.toTypedArray()) { _, i -> pad.connect(devices[i]) }
             .show()
+    }
+
+    // ---- Keyboard: the tablet's own keyboard types onto the TV ----
+    private lateinit var typeField: EditText
+    private val sentinel = "  " // lets us detect backspace on an "empty" field
+    private var resetting = false
+
+    private fun buildTypeField() = EditText(this).apply {
+        setText(sentinel); setSelection(sentinel.length)
+        isSingleLine = true
+        alpha = 0f
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+            InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        imeOptions = EditorInfo.IME_ACTION_SEND or EditorInfo.IME_FLAG_NO_EXTRACT_UI or
+            EditorInfo.IME_FLAG_NO_FULLSCREEN
+        setOnEditorActionListener { _, _, _ -> pad.tapKey(HidGamepad.KEY_ENTER); true }
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable) {
+                if (resetting) return
+                val t = s.toString()
+                when {
+                    t.length < sentinel.length -> repeat(sentinel.length - t.length) { pad.tapKey(HidGamepad.KEY_BACKSPACE) }
+                    t.startsWith(sentinel) -> pad.typeText(t.substring(sentinel.length))
+                    else -> pad.typeText(t.trim())
+                }
+                resetting = true
+                setText(sentinel); setSelection(sentinel.length)
+                resetting = false
+            }
+        })
+    }
+
+    private fun toggleKeyboard() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        if (typeField.hasFocus()) {
+            imm.hideSoftInputFromWindow(typeField.windowToken, 0); typeField.clearFocus()
+        } else {
+            typeField.requestFocus(); imm.showSoftInput(typeField, InputMethodManager.SHOW_IMPLICIT)
+        }
     }
 
     override fun onDestroy() {
