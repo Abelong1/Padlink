@@ -36,7 +36,7 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
             0xC0.toByte(),
             // Report 2: Consumer Control (what real TV remotes send) — one 16-bit usage
             0x05, 0x0C, 0x09, 0x01, 0xA1.toByte(), 0x01,
-            0x85.toByte(), CONSUMER_ID.toByte(),
+            0x85.toByte(), 0x02, // report ID = CONSUMER_ID
             0x15, 0x00, 0x26, 0xFF.toByte(), 0x03,
             0x19, 0x00, 0x2A, 0xFF.toByte(), 0x03,
             0x75, 0x10, 0x95.toByte(), 0x01, 0x81.toByte(), 0x00,
