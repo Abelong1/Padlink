@@ -38,6 +38,13 @@ class MainActivity : AppCompatActivity() {
             addView(status)
             addView(Button(context).apply { text = "Pair"; setOnClickListener { makeDiscoverable() } })
             addView(Button(context).apply { text = "Connect"; setOnClickListener { pickDevice() } })
+            addView(Button(context).apply {
+                text = "Mode: TV"
+                setOnClickListener {
+                    pad.tvMode = !pad.tvMode
+                    text = if (pad.tvMode) "Mode: TV" else "Mode: GAME"
+                }
+            })
         }
 
         setContentView(FrameLayout(this).apply {

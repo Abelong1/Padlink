@@ -33,8 +33,35 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
             0x09, 0x30, 0x09, 0x31, 0x09, 0x32, 0x09, 0x35,
             0x15, 0x81.toByte(), 0x25, 0x7F, 0x75, 0x08, 0x95.toByte(), 0x04,
             0x81.toByte(), 0x02,
+            0xC0.toByte(),
+            // Report 2: Consumer Control (what real TV remotes send) — one 16-bit usage
+            0x05, 0x0C, 0x09, 0x01, 0xA1.toByte(), 0x01,
+            0x85.toByte(), CONSUMER_ID.toByte(),
+            0x15, 0x00, 0x26, 0xFF.toByte(), 0x03,
+            0x19, 0x00, 0x2A, 0xFF.toByte(), 0x03,
+            0x75, 0x10, 0x95.toByte(), 0x01, 0x81.toByte(), 0x00,
             0xC0.toByte()
         )
+
+        const val CONSUMER_ID = 2
+        // Consumer usages → Android keys
+        const val CC_OK = 0x41      // Menu Pick → DPAD_CENTER
+        const val CC_UP = 0x42; const val CC_DOWN = 0x43
+        const val CC_LEFT = 0x44; const val CC_RIGHT = 0x45
+        const val CC_MENU = 0x40
+        const val CC_HOME = 0x223   // AC Home
+        const val CC_BACK = 0x224   // AC Back
+        const val CC_VOL_UP = 0xE9; const val CC_VOL_DOWN = 0xEA
+    }
+
+    /** TV mode: D-pad/A/B act like a TV remote. Game mode: everything is gamepad. */
+    @Volatile var tvMode = true
+    private var consumerKey = 0
+
+    fun remoteKey(usage: Int, down: Boolean) {
+        if (down) consumerKey = usage else if (consumerKey == usage) consumerKey = 0 else return
+        val h = host ?: return
+        hid?.sendReport(h, CONSUMER_ID, byteArrayOf((consumerKey and 0xFF).toByte(), (consumerKey shr 8).toByte()))
     }
 
     private val adapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
@@ -97,6 +124,14 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
 
     // ---- Input API ----
     fun setButton(bit: Int, down: Boolean) {
+        val remote = when {
+            bit == HOME -> CC_HOME
+            tvMode && bit == A -> CC_OK
+            tvMode && bit == B -> CC_BACK
+            tvMode && bit == START -> CC_MENU
+            else -> 0
+        }
+        if (remote != 0) { remoteKey(remote, down); return }
         buttons = if (down) buttons or (1 shl bit) else buttons and (1 shl bit).inv()
         send()
     }
@@ -111,6 +146,13 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
     /** D-pad: 0=N,2=E,4=S,6=W (diagonals allowed), 8=released */
     fun setDpad(h: Int) {
         if (h == dpadHat) return
+        if (tvMode) {
+            val key = when (h) { 0 -> CC_UP; 2 -> CC_RIGHT; 4 -> CC_DOWN; 6 -> CC_LEFT; else -> 0 }
+            if (h == 8) remoteKey(consumerKey, false)
+            else if (key != 0) remoteKey(key, true)   // diagonals keep the last direction
+            dpadHat = h
+            return
+        }
         dpadHat = h
         send()
     }
