@@ -43,7 +43,9 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
 
     // Live state
     private var buttons = 0
-    private var hat = 8 // 8 = centered (null state)
+    private var stickHat = 8 // 8 = centered (null state)
+    private var dpadHat = 8
+    private val hat get() = if (dpadHat != 8) dpadHat else stickHat
     private val axes = ByteArray(4)
 
     val isConnected get() = host != null
@@ -102,7 +104,14 @@ class HidGamepad(private val ctx: Context, private val onStatus: (String) -> Uni
     /** dx, dy in -1..1 */
     fun setLeftStick(dx: Float, dy: Float) {
         axes[0] = toAxis(dx); axes[1] = toAxis(dy)
-        hat = toHat(dx, dy)
+        stickHat = toHat(dx, dy)
+        send()
+    }
+
+    /** D-pad: 0=N,2=E,4=S,6=W (diagonals allowed), 8=released */
+    fun setDpad(h: Int) {
+        if (h == dpadHat) return
+        dpadHat = h
         send()
     }
 
