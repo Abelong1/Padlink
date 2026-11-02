@@ -50,16 +50,18 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener {
                     pad.tvMode = !pad.tvMode
                     text = if (pad.tvMode) "Mode: TV" else "Mode: GAME"
+                    padView.invalidate()
                 }
             })
             addView(Button(context).apply { text = "⌨ Type"; setOnClickListener { toggleKeyboard() } })
         }
 
         typeField = buildTypeField()
+        padView = PadView(this, pad)
 
         setContentView(FrameLayout(this).apply {
-            addView(PadView(context, pad))
-            addView(typeField, FrameLayout.LayoutParams(1, 1, Gravity.BOTTOM))
+            addView(padView)
+            addView(typeField, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { topMargin = 140 })
             addView(bar, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         })
 
@@ -103,13 +105,18 @@ class MainActivity : AppCompatActivity() {
 
     // ---- Keyboard: the tablet's own keyboard types onto the TV ----
     private lateinit var typeField: EditText
+    private lateinit var padView: PadView
     private val sentinel = "  " // lets us detect backspace on an "empty" field
     private var resetting = false
 
     private fun buildTypeField() = EditText(this).apply {
         setText(sentinel); setSelection(sentinel.length)
         isSingleLine = true
-        alpha = 0f
+        visibility = android.view.View.GONE
+        hint = "Type here — it goes to the TV"
+        setTextColor(Color.parseColor("#F5E6D3")); setHintTextColor(Color.parseColor("#B89F86"))
+        setBackgroundColor(Color.parseColor("#3A2A20")); textSize = 20f
+        setPadding(32, 24, 32, 24)
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
             InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
         imeOptions = EditorInfo.IME_ACTION_SEND or EditorInfo.IME_FLAG_NO_EXTRACT_UI or
@@ -135,10 +142,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleKeyboard() {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-        if (typeField.hasFocus()) {
-            imm.hideSoftInputFromWindow(typeField.windowToken, 0); typeField.clearFocus()
+        if (typeField.visibility == android.view.View.VISIBLE) {
+            imm.hideSoftInputFromWindow(typeField.windowToken, 0)
+            typeField.clearFocus(); typeField.visibility = android.view.View.GONE
         } else {
-            typeField.requestFocus(); imm.showSoftInput(typeField, InputMethodManager.SHOW_IMPLICIT)
+            typeField.visibility = android.view.View.VISIBLE
+            typeField.requestFocus()
+            typeField.post { imm.showSoftInput(typeField, InputMethodManager.SHOW_FORCED) }
         }
     }
 

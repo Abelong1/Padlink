@@ -98,11 +98,12 @@ class PadView(ctx: Context, private val pad: HidGamepad) : View(ctx) {
             if (b.round) c.drawOval(b.rect, paint) else c.drawRoundRect(b.rect, 20f, 20f, paint)
             textPaint.color = if (on) bg else text
             subPaint.color = textPaint.color
-            if (b.sub.isEmpty()) {
+            val sub = if (pad.tvMode) HidGamepad.TV_KEYS[b.bit]?.second ?: "" else ""
+            if (sub.isEmpty()) {
                 c.drawText(b.label, b.rect.centerX(), b.rect.centerY() + textPaint.textSize / 3, textPaint)
             } else {
                 c.drawText(b.label, b.rect.centerX(), b.rect.centerY(), textPaint)
-                c.drawText(b.sub, b.rect.centerX(), b.rect.centerY() + subPaint.textSize * 1.2f, subPaint)
+                c.drawText(sub, b.rect.centerX(), b.rect.centerY() + subPaint.textSize * 1.2f, subPaint)
             }
         }
     }

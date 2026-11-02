@@ -88,6 +88,17 @@ class HidGamepad(private val ctx: Context) {
         const val CC_HOME = 0x223   // AC Home
         const val CC_BACK = 0x224   // AC Back
         const val CC_VOL_UP = 0xE9; const val CC_VOL_DOWN = 0xEA
+        const val CC_MUTE = 0xE2; const val CC_PLAY_PAUSE = 0xCD
+        const val CC_REWIND = 0xB4; const val CC_FFWD = 0xB3
+
+        /** What each gamepad button does in TV mode (and its on-screen hint). */
+        val TV_KEYS = mapOf(
+            A to (CC_OK to "OK"), B to (CC_BACK to "BACK"),
+            X to (CC_PLAY_PAUSE to "PLAY/PAUSE"), Y to (CC_MUTE to "MUTE"),
+            L1 to (CC_VOL_DOWN to "VOL−"), R1 to (CC_VOL_UP to "VOL+"),
+            L2 to (CC_REWIND to "REWIND"), R2 to (CC_FFWD to "FORWARD"),
+            START to (CC_MENU to "MENU"), SELECT to (CC_MENU to "MENU")
+        )
     }
 
     private val typer = Executors.newSingleThreadExecutor()
@@ -170,7 +181,7 @@ class HidGamepad(private val ctx: Context) {
                 hid = proxy as BluetoothHidDevice
                 val sdp = BluetoothHidDeviceAppSdpSettings(
                     "PadLink Gamepad", "Phone gamepad", "Meow",
-                    BluetoothHidDevice.SUBCLASS1_NONE, DESCRIPTOR
+                    BluetoothHidDevice.SUBCLASS1_COMBO, DESCRIPTOR
                 )
                 hid?.registerApp(sdp, null, null, Executors.newSingleThreadExecutor(), callback)
             }
@@ -210,9 +221,7 @@ class HidGamepad(private val ctx: Context) {
     fun setButton(bit: Int, down: Boolean) {
         val remote = when {
             bit == HOME -> CC_HOME
-            tvMode && bit == A -> CC_OK
-            tvMode && bit == B -> CC_BACK
-            tvMode && bit == START -> CC_MENU
+            tvMode -> TV_KEYS[bit]?.first ?: 0
             else -> 0
         }
         if (remote != 0) { remoteKey(remote, down); return }
