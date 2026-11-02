@@ -1,5 +1,7 @@
 name: Build APK
 on: [push, workflow_dispatch]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,3 +19,10 @@ jobs:
         with:
           name: PadLink-apk
           path: app/build/outputs/apk/debug/*.apk
+      - run: cp app/build/outputs/apk/debug/app-debug.apk PadLink.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: PadLink (latest build)
+          files: PadLink.apk
+          make_latest: true
